@@ -6,7 +6,7 @@ this process for speeding up searches as:
 
 for more details about kdtree check this: https://en.wikipedia.org/wiki/K-d_tree
 
-This KDTree file in unity project.
-it has 2 scenes every one is for searches:
-CollisionShapes: nearest neighbor searches.
-ConnectivePoints: range searches.
+This KDTree file in unity project.      
+it has 2 scenes every one is for searches:     
+CollisionShapes: nearest neighbor searches.     
+ConnectivePoints: range searches.     
