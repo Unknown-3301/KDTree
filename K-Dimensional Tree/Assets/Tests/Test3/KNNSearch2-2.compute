@@ -1,0 +1,281 @@
+#pragma kernel CSMain
+
+static const int MaxDepth = 32;
+static const int NeighborsNum = 2;
+
+struct KDTreeBranch
+{
+    int DivisionDimension;
+    float DivisionValue;
+
+    int BaseBranchIndex;
+    int LowerBranchIndex;
+    int HigherBranchIndex;
+    int Leaf;
+
+    int ElementsStartIndex;
+    int ElementsCount;
+};
+struct Point
+{
+    float2 Position;
+    float4 Color;
+};
+struct KNNDataHolder
+{
+    bool Found[NeighborsNum];
+    Point Neighbors[NeighborsNum];
+    float SquaredDistances[NeighborsNum];
+    
+    float2 Position;
+    
+    //This function exist because writing to an array must be done natively
+    void SetNeighbor(int index, Point neighbor, float sqr, bool found)
+    {
+        switch (index)
+        {
+            case 0:
+                Neighbors[0] = neighbor;
+                SquaredDistances[0] = sqr;
+                Found[0] = found;
+                break;
+            case 1:
+                Neighbors[1] = neighbor;
+                SquaredDistances[1] = sqr;
+                Found[1] = found;
+                break;
+        }
+    }
+    
+    void Init()
+    {
+        for (int i = 0; i < NeighborsNum; i++)
+        {
+            SquaredDistances[i] = 99999999;
+            Neighbors[i].Position = 0;
+            Neighbors[i].Color = 0;
+            Found[i] = false;
+        }
+    }
+    
+    float PointSquaredDistance(Point p, float2 pos)
+    {
+        float2 diff = p.Position - pos;
+        return diff.x * diff.x + diff.y * diff.y;
+    }
+    
+    void ShiftNeighbors(int start)
+    {
+        for (int i = NeighborsNum - 1; i > start; i--)
+        {
+            SetNeighbor(i, Neighbors[i - 1], SquaredDistances[i - 1], Found[i - 1]);
+        }
+    }
+    
+    void TryAddNeighbor(Point neighbor)
+    {
+        for (int i = 0; i < NeighborsNum; i++)
+        {
+            if (!Found[i])
+            {
+                SetNeighbor(i, neighbor, PointSquaredDistance(neighbor, Position), true);
+                return;
+            }
+            else
+            {
+                float sqr = PointSquaredDistance(neighbor, Position);
+
+                if (sqr < SquaredDistances[i])
+                {
+                    ShiftNeighbors(i);
+                    SetNeighbor(i, neighbor, sqr, true);
+                    return;
+                }
+            }
+        }
+    }
+    
+    float GetMaxSquaredDistance()
+    {
+        return SquaredDistances[NeighborsNum - 1];
+    }
+};
+
+StructuredBuffer<Point> Points;
+StructuredBuffer<KDTreeBranch> Branches;
+StructuredBuffer<float> BranchesPositions;
+
+float2 ScreenToWorld;
+
+RWTexture2D<float4> Texture;
+
+void SearchPoints(float2 pos, KDTreeBranch branch, inout KNNDataHolder holder)
+{
+    int start = branch.ElementsStartIndex;
+    int last = start + branch.ElementsCount - 1;
+
+    for (int i = start; i <= last; i++)
+    {
+        holder.TryAddNeighbor(Points[i]);
+    }
+}
+int ChooseBranch(float2 pos, KDTreeBranch base)
+{
+    if (pos[base.DivisionDimension] <= base.DivisionValue)
+    {
+        return -1;
+    }
+    else
+    {
+        return 1;
+    }
+}
+float KDBoxSqrDis(float2 pos, int branchIndex)
+{
+    int posIndex = branchIndex * 4; //4 because every branch has (minX, minY, maxX, maxY)
+    float2 parMin = float2(BranchesPositions[posIndex], BranchesPositions[posIndex + 1]);
+    float2 parMax = float2(BranchesPositions[posIndex + 2], BranchesPositions[posIndex + 3]);
+
+    float2 clamped = clamp(pos, parMin, parMax);
+
+    float2 diff = pos - clamped;
+    
+    return diff.x * diff.x + diff.y * diff.y;
+}
+KNNDataHolder SearchClosest(float2 pos)
+{
+    KDTreeBranch current = Branches[0];
+    
+    KNNDataHolder data;
+    data.Position = pos;
+    data.Init();
+    
+    bool completness[MaxDepth]; //each bit represent a branch in the branch sequence. 0 means we didn't finish searching it and 1 means we have finished searching it.
+    bool directions[MaxDepth]; //each bit represent a direction (lower or higher) in the branch sequence.
+    
+    for (int i = 0; i < MaxDepth; i++)
+    {
+        completness[i] = false;
+        directions[i] = false;
+    }
+    
+    int currentDepth = 0;
+    int safetyLimit = 9999;
+    int safetyLimitCounter = 0;
+
+    bool wentdown = true;
+    safetyLimitCounter = 0;
+    
+    while (safetyLimitCounter < safetyLimit)
+    {
+        safetyLimitCounter++;
+        
+        if (wentdown)
+        {
+            if (current.Leaf == 1)
+            {
+                SearchPoints(pos, current, data);
+                currentDepth--;
+            
+                if (currentDepth < 0)
+                {
+                    return data;
+                }
+            
+                current = Branches[current.BaseBranchIndex];
+                wentdown = false;
+            }
+            else
+            {
+                int choice = ChooseBranch(pos, current);
+                
+                if (choice == -1)
+                {
+                    current = Branches[current.LowerBranchIndex];
+                    directions[currentDepth] = false;
+                }
+                else
+                {
+                    current = Branches[current.HigherBranchIndex];
+                    directions[currentDepth] = true;
+                }
+                
+                currentDepth++;
+                completness[currentDepth] = false;
+            }
+        }
+        else
+        {
+            if (!completness[currentDepth])
+            {
+                KDTreeBranch newB = current;
+                int index = 0;
+                
+                if (directions[currentDepth])
+                {
+                    newB = Branches[current.LowerBranchIndex];
+                    index = current.LowerBranchIndex;
+                }
+                else
+                {
+                    newB = Branches[current.HigherBranchIndex];
+                    index = current.HigherBranchIndex;
+                }
+                
+                completness[currentDepth] = true;
+            
+                float sqr = KDBoxSqrDis(pos, index);
+                
+                if (sqr < data.GetMaxSquaredDistance())
+                {
+                    current = newB;
+                    currentDepth++;
+                    completness[currentDepth] = false;
+                    wentdown = true;
+                }
+            }
+            else
+            {
+                currentDepth--;
+                
+                if (currentDepth < 0)
+                {
+                    return data;
+                }
+                
+                current = Branches[current.BaseBranchIndex];
+            }
+        }
+    }
+    
+    return data;
+}
+
+float SquaredDistance(float2 p)
+{
+    return p.x * p.x + p.y + p.y;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint width, height;
+    Texture.GetDimensions(width, height);
+    
+    if (id.x >= width || id.y >= height)
+    {
+        return;
+    }
+
+    float2 uv = id.xy / float2(width, height) * 2 - 1;
+    float2 pos = uv * ScreenToWorld;
+    
+    KNNDataHolder data = SearchClosest(pos);
+    
+    float d1 = sqrt(data.SquaredDistances[0]);
+    float d2 = sqrt(data.SquaredDistances[1]);
+    float m = d1 + d2;
+    float s = abs(d1 - d2) * m;
+    
+    Texture[id.xy] = data.Neighbors[0].Color * s;
+}

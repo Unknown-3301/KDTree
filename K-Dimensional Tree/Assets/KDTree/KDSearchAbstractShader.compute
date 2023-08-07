@@ -1,0 +1,173 @@
+/*
+
+This is an abstract code for implementing KDTree in shaders.
+
+//This is the max depth of the kdtree. It can be calculated using the formula:
+//    Ceil(Logq[n / k]) + 1
+//where q = 0.5 + (KDTreeSettings.RebuildPercent) / 2
+//      k : total number of elements
+//      n : KDTreeSettings.MaxLeafSize
+static const int MaxDepth = 32;
+
+struct KDTreeBranch
+{
+    int DivisionDimension;
+    float DivisionValue;
+
+    int BaseBranchIndex;
+    int LowerBranchIndex;
+    int HigherBranchIndex;
+    int Leaf;
+
+    int ElementsStartIndex;
+    int ElementsCount;
+};
+struct Element
+{
+    
+};
+
+StructuredBuffer<Element> Elements;
+StructuredBuffer<KDTreeBranch> Branches;
+StructuredBuffer<float> BranchesPositions;
+
+void SearchElements(..., KDTreeBranch branch)
+{
+    int start = branch.ElementsStartIndex;
+    int last = start + branch.ElementsCount - 1;
+
+    for (int i = start; i <= last; i++)
+    {
+        //Compare elements and choose
+    }
+}
+int ChooseValidBranch(..., KDTreeBranch base)
+{
+    //Choose a route (lower or higher) from base branch
+    //if the choice is lower return -1
+    //if the choise is higher return 1
+    //if neither of them is valid return 0
+
+    //examples of this be like comparing the D-th coordinate of a position to the partition value of the base branch
+    //where D is the partition dimension of the base branch.
+    //or check if either of the lower or higher branches shape boxes collide with a shape (collision detection) or intersect with a ray (ray tracing)
+}
+bool IfBranchValid(..., KDTreeBranch branch)
+{
+    //Checks whether this branch is valid. This is used when done searching one route of a base branch to check if the
+    //other route is valid, so that if it isn't, then just skip it.
+}
+... SearchClosest(...)
+{
+    KDTreeBranch current = Branches[0];
+    
+    bool completness[MaxDepth]; //Each element represents whether we finished searching a branch from the current branch path (branches sequence), where the element index refers to the depth level of that branch
+    bool directions[MaxDepth]; //Each element represents the direction taken in a branch from the current branch path (branches sequence), where its index refers to the depth of that branch. //false = lower
+    
+    for (int i = 0; i < MaxDepth; i++)
+    {
+        completness[i] = false;
+        directions[i] = false;
+    }
+    
+    int currentDepth = 0;
+    int safetyLimit = 9999;
+    int safetyLimitCounter = 0;
+
+    bool wentdown = true;
+    safetyLimitCounter = 0;
+    
+    while (safetyLimitCounter < safetyLimit)
+    {
+        safetyLimitCounter++;
+        
+        if (wentdown)
+        {
+            if (current.Leaf == 1) //If we are going down and reached a leaf branch.
+            {
+                SearchElements(..., current);
+                currentDepth--;
+            
+                if (currentDepth < 0)
+                {
+                    return data;
+                }
+            
+                current = Branches[current.BaseBranchIndex];
+                wentdown = false;
+            }
+            else //If we are going down and didn't reach a leaf branch yet.
+            {
+                int choice = ChooseValidBranch(..., current);
+                
+                if (choice == -1)
+                {
+                    current = Branches[current.LowerBranchIndex];
+                    directions[currentDepth] = false;
+                }
+                else if (choice == 1)
+                {
+                    current = Branches[current.HigherBranchIndex];
+                    directions[currentDepth] = true;
+                }
+                else
+                {
+                    currentDepth--;
+            
+                    if (currentDepth < 0)
+                    {
+                        return ...;
+                    }
+            
+                    current = Branches[current.BaseBranchIndex];
+                    wentdown = false;
+                }
+                
+                currentDepth++;
+                completness[currentDepth] = false;
+            }
+        }
+        else
+        {
+            if (!completness[currentDepth]) //If we just finished searching a branch and returned to its base branch and we didn't finish searching that branch, meaning we didn't search the other route from that branch.
+            {
+                KDTreeBranch newB = current;
+
+                if (directions[currentDepth])
+                {
+                    newB = Branches[current.LowerBranchIndex];
+                }
+                else
+                {
+                    newB = Branches[current.HigherBranchIndex];
+                }
+                
+                completness[currentDepth] = true;
+                
+                if (IfBranchValid(..., newB))
+                {
+                    current = newB;
+                    currentDepth++;
+                    completness[currentDepth] = false;
+                    wentdown = true;
+                }
+            }
+            else //If we just finished searching a branch and returned to its base branch and we finished searching that branch, meaning we already searched the other route from that branch.
+            {
+                currentDepth--;
+                
+                if (currentDepth < 0)
+                {
+                    return data;
+                }
+                
+                current = Branches[current.BaseBranchIndex];
+            }
+        }
+    }
+    
+    return ...;
+}
+
+
+*/
