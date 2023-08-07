@@ -111,6 +111,14 @@ public class KDTree<T> where T : class, IKDShape
 
         return holder.Neighbors;
     }
+    public List<T> FindNeighborsInRange(IKDShape shape, float distance)
+    {
+        List<T> neighbors = new List<T>();
+
+        MainBranch.FindNeighborsInRange(shape, neighbors, distance * distance);
+
+        return neighbors;
+    }
     /// <summary>
     /// Returns the collided shapes with <paramref name="shape"/>.
     /// </summary>

@@ -350,6 +350,9 @@ public class KDTreeBranch<T> where T : class, IKDShape
         {
             for (int i = 0; i < storedShapes.Count; i++)
             {
+                if (shape == storedShapes[i])
+                    continue;
+
                 float sqr = KDSqrDistance(shape, storedShapes[i]);
 
                 if (sqr < sqrDistance)
@@ -398,6 +401,37 @@ public class KDTreeBranch<T> where T : class, IKDShape
             return;
 
         second.FindNearestNeighbors(holder);
+    }
+    public void FindNeighborsInRange(IKDShape shape, List<T> neighbors, float sqrDistance)
+    {
+        if (Leaf)
+        {
+            for (int i = 0; i < storedShapes.Count; i++)
+            {
+                if (shape == storedShapes[i])
+                    continue;
+
+                float sqr = KDSqrDistance(shape, storedShapes[i]);
+
+                if (sqr <= sqrDistance)
+                {
+                    neighbors.Add(storedShapes[i]);
+                }
+            }
+
+            return;
+        }
+
+        float p = shape.GetPosition(PartitionDimension);
+        KDTreeBranch<T> first = p > PartitionValue ? HigherBranch : LowerBranch;
+        KDTreeBranch<T> second = p > PartitionValue ? LowerBranch : HigherBranch;
+
+        first.FindNeighborsInRange(shape, neighbors, sqrDistance);
+
+        if (second.GetBoxSquaredDistance(shape) > sqrDistance)
+            return;
+
+        second.FindNeighborsInRange(shape, neighbors, sqrDistance);
     }
     public void GetCollidedShapes(IKDShape shape, List<T> collided)
     {
